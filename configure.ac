@@ -400,7 +400,10 @@ AC_CACHE_CHECK([for libevent directory], ac_cv_libevent_dir, [
     AC_TRY_LINK([#include <sys/time.h>
 #include <sys/types.h>
 #include <event.h>], [ event_init(); ],
-       [ libevent_linked=yes ], [ libevent_linked=no ])
+       [ libevent_linked=yes ], [ libevent_linked=no ],
+       [ #include <jsonsl/jsonsl.h> ],
+       [ jsonsl_t jsn = jsonsl_new(JSONSL_MAX_LEVELS); ],
+       [ libjsonsl_linked=yes ], [ libjsonsl_linked=no ])
     if test $libevent_linked = yes; then
        if test ! -z "$ledir" ; then
          ac_cv_libevent_dir=$ledir

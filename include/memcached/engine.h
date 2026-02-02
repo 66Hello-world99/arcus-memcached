@@ -32,6 +32,7 @@
 #include "memcached/extension.h"
 #include "memcached/vbucket.h"
 #include "memcached/engine_common.h"
+#include "memcached/json_type.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -607,7 +608,64 @@ extern "C" {
                                      const uint32_t attr_count,
                                      item_attr *attr_data,
                                      uint16_t vbucket);
-
+#ifdef JSON_SUPPORT
+        /*
+         * JSON Interface
+         */
+        ENGINE_ERROR_CODE (*json_elem_get_type)(eitem *e, json_node_type* type);
+        ENGINE_ERROR_CODE (*json_struct_create)(ENGINE_HANDLE* handle, 
+                                                const void* cookie, 
+                                                const void* key, 
+                                                const int nkey, 
+                                                item_attr *attrp, 
+                                                uint16_t vbucket);
+        ENGINE_ERROR_CODE (*json_elem_alloc)(ENGINE_HANDLE* handle, 
+                                             const void* cookie, 
+                                             const void* key, 
+                                             const int nkey, 
+                                             eitem** e, //TODO check
+                                             json_node_type type, 
+                                             json_value* value);
+        //todo json_elem_free
+        void (*json_elem_release)(ENGINE_HANDLE* engine, eitem** e);
+        ENGINE_ERROR_CODE (*json_elem_append)(ENGINE_HANDLE* handle, 
+                                              const void* cookie, 
+                                              const void* key, 
+                                              const int nkey, 
+                                              eitem** dest, 
+                                              eitem* e, 
+                                              eitem* e_temp, 
+                                              json_node_type type, 
+                                              uint16_t vbucket);
+        ENGINE_ERROR_CODE (*json_elem_set)(ENGINE_HANDLE* handle, 
+                                           const void* cookie, 
+                                           const void* key, 
+                                           const int nkey, 
+                                           const void* path, 
+                                           const int npath, 
+                                           eitem *eitem, 
+                                           item_attr *attrp, 
+                                           bool *created, 
+                                           uint16_t vbucket);
+        ENGINE_ERROR_CODE (*json_elem_delete)(ENGINE_HANDLE* handle, 
+                                              const void* cookie, 
+                                              const void* key, 
+                                              const int nkey, 
+                                              const void *path, 
+                                              const int npath, 
+                                              const bool drop_if_empty, 
+                                              bool *dropped, uint16_t vbucket);
+        ENGINE_ERROR_CODE (*json_elem_get)(ENGINE_HANDLE* handle, 
+                                           const void* cookie, 
+                                           const void* key, 
+                                           const int nkey, 
+                                           const void* path, 
+                                           const int npath, 
+                                           eitem** eitem, 
+                                           uint16_t vbucket);
+        ENGINE_ERROR_CODE (*json_elem_dfs)(eitem* root, char** buffer, size_t* len);
+        void (*json_elem_scalar)(ENGINE_HANDLE* handle, eitem** e, eitem** dest);
+#endif
         /*
          * Statistics
          */
