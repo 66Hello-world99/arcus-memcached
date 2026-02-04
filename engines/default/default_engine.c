@@ -1163,7 +1163,7 @@ default_json_elem_alloc(ENGINE_HANDLE *handle, const void *cookie,
     ACTION_BEFORE_WRITE(cookie, key, nkey);
     elem = json_elem_alloc(get_handle(handle), type, value, cookie);
     ACTION_AFTER_WRITE(cookie, get_handle(handle), ret);
-    if (elem != NULL) { 
+    if (elem != NULL) {
         *e = elem;
         ret = ENGINE_SUCCESS;
     } else {
@@ -1262,7 +1262,6 @@ default_json_elem_scalar(ENGINE_HANDLE *handle, eitem **e, eitem **dest)
     struct default_engine *engine = get_handle(handle);
     json_elem_scalar(engine, (json_elem_item**)e, (json_elem_item**)dest);
 }
-
 
 #endif
 
@@ -2114,7 +2113,7 @@ get_elem_info(ENGINE_HANDLE *handle, const void *cookie,
             elem_info->value = (const char*)&elem->value.boolval;
             elem_info->nvalue = sizeof(int);
         } else if(elem_info->type==N_ARRAY || elem_info->type==N_DICT){
-            elem_info->value = (const char*)elem; 
+            elem_info->value = (const char*)elem;
                 elem_info->nvalue = sizeof(json_elem_item);
         }
         else{
@@ -2209,7 +2208,7 @@ create_instance(uint64_t interface, GET_SERVER_API get_server_api,
          .btree_elem_smget   = default_btree_elem_smget,
 #endif
 #ifdef JSON_SUPPORT
-         /* JSON Collection API */ 
+         /* JSON Collection API */
          .json_elem_get_type = default_json_elem_get_type,
          .json_struct_create = default_json_struct_create,
          .json_elem_alloc   = default_json_elem_alloc,

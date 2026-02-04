@@ -1171,7 +1171,7 @@ void stats_prefix_record_jop_set(const char *key, const size_t nkey, const bool 
 #ifdef NESTED_PREFIX
     while (pfs != NULL) {
         pfs->num_jop_sets++;
-        if (is_hit) 
+        if (is_hit)
             pfs->num_jop_set_hits++;
         pfs = pfs->parent_stat;
     }
@@ -1301,7 +1301,7 @@ static int do_stats_prefix_write_buffer(char *buffer, const size_t buflen,
         pfs->num_bop_positions, pfs->num_bop_position_hits,
         pfs->num_bop_pwgs, pfs->num_bop_pwg_hits,
         pfs->num_bop_gbps, pfs->num_bop_gbp_hits,
-        pfs->num_jop_sets, pfs->num_jop_set_hits,//todo macro?
+        pfs->num_jop_sets, pfs->num_jop_set_hits,
         pfs->num_jop_deletes, pfs->num_jop_delete_hits,
         pfs->num_jop_gets, pfs->num_jop_get_hits,
         pfs->num_getattrs, pfs->num_setattrs);

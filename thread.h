@@ -143,7 +143,7 @@ struct thread_stats {
     uint64_t          bop_gbp_none_hits;
     uint64_t          bop_gbp_misses;
 #ifdef SUPPORT_BOP_MGET
-    uint64_t          bop_mget_oks;
+    uint64_t          _oks;
 #endif
 #ifdef SUPPORT_BOP_SMGET
     uint64_t          bop_smget_oks;

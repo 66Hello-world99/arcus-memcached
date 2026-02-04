@@ -32,16 +32,9 @@ struct iovec {
 #include <sys/uio.h>
 #endif
 
-//ifdef JSON_SUPPORT todo
+
 #include "engines/default/json/jsondata.h"
 
-
-#define SCAN_COMMAND
-#define NESTED_PREFIX
-#define PROXY_SUPPORT
-//#define NEW_PREFIX_STATS_MANAGEMENT
-#define SUPPORT_BOP_MGET
-#define SUPPORT_BOP_SMGET
 #define JHPARK_OLD_SMGET_INTERFACE
 #define MULTI_NOTIFY_IO_COMPLETE
 //define JSON_SUPPORT

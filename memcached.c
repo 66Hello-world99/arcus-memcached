@@ -1677,7 +1677,7 @@ static inline char *get_item_type_str(uint8_t type)
     else if (type == ITEM_TYPE_BTREE)  return "b+tree";
     else                               return "unknown";
 }
-
+/*
 static inline char get_item_type_char(uint8_t type)
 {
     if (type == ITEM_TYPE_KV)          return 'K';
@@ -1686,7 +1686,7 @@ static inline char get_item_type_char(uint8_t type)
     else if (type == ITEM_TYPE_MAP)    return 'M';
     else if (type == ITEM_TYPE_BTREE)  return 'B';
     else                               return 'A';
-}
+}*/
 
 static inline char *get_ovflaction_str(uint8_t ovflact)
 {
@@ -3033,19 +3033,7 @@ static void process_jop_set_complete(conn *c)
     ENGINE_ERROR_CODE ret;
 
     mc_engine.v1->get_elem_info(mc_engine.v0, c, ITEM_TYPE_JSON, c->coll_eitem, &c->einfo);
-    /* 
-    eitem *elem = (eitem *)c->coll_eitem;
 
-    mc_engine.v1->get_elem_info(mc_engine.v0, c, ITEM_TYPE_JSON, elem, &c->einfo);
-    todo delete
-    volatile size_t *nb_ptr = (volatile size_t *)&c->einfo.nbytes;
-    volatile size_t *nv_ptr = (volatile size_t *)&c->einfo.nvalue;
-    volatile const char **v_ptr = (volatile const char **)&c->einfo.value;
-  
-    *nb_ptr = (size_t)c->coll_nelem;      // 강제 대입 (6)
-    *nv_ptr = (size_t)c->coll_nelem - 2;  // 강제 대입 (4)
-    *v_ptr  = (char*)elem + sizeof(json_elem_item);*/
-    
     c->einfo.nbytes = c->coll_nelem;
     c->einfo.nvalue=c->coll_nelem-2;
     c->einfo.value = (char*)c->coll_eitem + sizeof(json_elem_item);
@@ -8243,7 +8231,7 @@ static bool check_ascii_auth(conn *c, const uint16_t auth_flag, const char *key,
     return authorized;
 }
 #endif
-
+/*
 #ifdef JHPARK_OLD_SMGET_INTERFACE
 static inline int set_smget_mode_maybe(conn *c, token_t *tokens, size_t ntokens)
 {
@@ -8269,7 +8257,7 @@ static inline bool set_unique_maybe(conn *c, token_t *tokens, size_t ntokens)
     else
         return false;
 }
-#endif
+#endif*/
 
 static inline void set_noreply_maybe(conn *c, token_t *tokens, size_t ntokens)
 {
@@ -14252,12 +14240,12 @@ static void process_jop_prepare_nread(conn *c, int cmd, size_t vlen,
 {
     json_elem_item *elem = NULL;
     ENGINE_ERROR_CODE ret = ENGINE_SUCCESS;
-    
+
     if (vlen > settings.max_element_bytes) {
         ret = ENGINE_E2BIG;
     } else {
         size_t total_alloc = sizeof(json_elem_item) + vlen;
-        
+
         if ((elem = (json_elem_item *)malloc(total_alloc)) == NULL){
             ret = ENGINE_ENOMEM;
         } else {
@@ -14277,10 +14265,10 @@ static void process_jop_prepare_nread(conn *c, int cmd, size_t vlen,
 
         ritem_set_first(c, CONN_RTYPE_EINFO, vlen);
 
-        c->ritem = (char*)elem + sizeof(json_elem_item);//todo what for    
+        c->ritem = (char*)elem + sizeof(json_elem_item);
         c->rlbytes = vlen;
         c->rltotal = 0;
-        
+
         c->coll_eitem  = (void *)elem;
         c->coll_ecount = 1;
         c->coll_op     = OPERATION_JOP_SET;
@@ -14317,7 +14305,7 @@ static void set_jop_path (conn *c, token_t *tokens, size_t ntokens, json_path *p
     if (token_value && (token_value[0] == '$')) {
         path->value = tokens[JOP_PATH_TOKEN].value;
         path->vlen = (int32_t)tokens[JOP_PATH_TOKEN].length;
-       
+
     } else {
         path->value = "$";
         path->vlen = 1;
@@ -14368,7 +14356,7 @@ static void process_jop_delete(conn *c, const char *key, const size_t nkey,
 }
 
 static void process_jop_create(conn *c, char *key, size_t nkey, item_attr *attrp)
-{   
+{
     assert(c->ewouldblock == false);
 
     ENGINE_ERROR_CODE ret;
@@ -14419,7 +14407,7 @@ static void process_jop_command(conn *c, token_t *tokens, const size_t ntokens)
 
     json_path path;
     memset(&path, 0, sizeof(json_path));
-    
+
     if(ntokens>=4 && ntokens<=5 && strcmp(subcommand, "get") == 0){
 
         set_jop_path(c, tokens, ntokens, &path);
@@ -14434,7 +14422,7 @@ static void process_jop_command(conn *c, token_t *tokens, const size_t ntokens)
 
         set_jop_path(c, tokens, ntokens, &path);
 
-        int32_t vlen; 
+        int32_t vlen;
         //set_pipe_noreply_maybe(c, tokens, ntokens); todo
 
         if ((! safe_strtol(tokens[JOP_PATH_TOKEN+1].value, &vlen)) ||
@@ -14444,7 +14432,7 @@ static void process_jop_command(conn *c, token_t *tokens, const size_t ntokens)
             return;
         }
         vlen += 2;
-        
+
         if (check_and_handle_pipe_state(c)) {
             process_jop_prepare_nread(c, (int)OPERATION_JOP_SET, vlen, key, nkey, path.value, path.vlen);
         } else { /* pipe error */
@@ -14564,6 +14552,8 @@ static void process_command_ascii(conn *c, char *command, int cmdlen)
             process_sop_command(c, tokens, ntokens);
         } else if (strcmp(cmd, "lop") == 0) {
             process_lop_command(c, tokens, ntokens);
+        } else if (strcmp(cmd, "jop") == 0) {
+            process_jop_command(c, tokens, ntokens);
         } else {
             unknown_command = true;
         }
@@ -14626,7 +14616,7 @@ static void process_command_ascii(conn *c, char *command, int cmdlen)
             process_reload_command(c, tokens, ntokens);
         }
 #endif
-#ifdef JSON_SUPPORT    
+#ifdef JSON_SUPPORT
     else if((ntokens >= 4) && (strcmp(tokens[COMMAND_TOKEN].value, "jop")) == 0)
     {
         printf("json support\n");

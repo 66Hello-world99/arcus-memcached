@@ -186,9 +186,9 @@ default_engine_la_SOURCES= \
                     engines/default/coll_json.c \
                     engines/default/coll_json.h \
                     engines/default/json/jsondata.c \
-                    engines/default/json/jsondata.h \ 
+                    engines/default/json/jsondata.h \
                     engines/default/slabs.c \
-                    engines/default/slabs.h                
+                    engines/default/slabs.h
 default_engine_la_DEPENDENCIES= libmcd_util.la
 default_engine_la_LIBADD= libmcd_util.la $(LIBM)
 default_engine_la_LDFLAGS= -avoid-version -shared -module -no-undefined

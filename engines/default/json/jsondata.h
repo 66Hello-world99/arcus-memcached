@@ -16,9 +16,12 @@
 #define JSON_ITEM_STATUS_FREE   0
 
 /* Object */
-
 #define OBJ_OK 0
 #define OBJ_ERR 1
+
+/* MAX CAPACITY */ //todo max?
+#define INITIAL_CONTAINER_SIZE 4
+#define MAX_CONTAINER_SIZE 50000
 
 #define NODE_IS_SCALAR(n) (!n ? 1 : (int)(n->type & (N_STRING | N_NUMBER | N_INTEGER | N_BOOLEAN )))
 
@@ -33,6 +36,7 @@ typedef struct {
     struct _json_elem_item **entries;
     uint32_t len;
     uint32_t cap;
+    uint32_t alloc_size;
 } t_array;
 
 typedef struct {
@@ -44,6 +48,7 @@ typedef struct {
     struct _json_elem_item **entries;
     uint32_t len;
     uint32_t cap;
+    uint32_t alloc_size;
 } t_dict;
 
 typedef struct _json_elem_item {
@@ -59,23 +64,25 @@ typedef struct _json_elem_item {
     } value;
     json_node_type type;
     uint16_t refcount;
-    uint8_t status;     /* 3(used), 2(insert mark), 1(delete_mark), 0(free) */
+    uint8_t  slabs_clsid;    /* which slab class we're in */
+    uint32_t nbytes;         /**< The total size of the data (in bytes) */
+    uint8_t status;          /* 3(used), 2(insert mark), 1(delete_mark), 0(free) */
 } json_elem_item;
 
-json_elem_item *new_null_item(void);
-json_elem_item *new_keyval_item(const char *key, uint32_t len, json_elem_item *n);
-json_elem_item *new_bool_item(int val);
-json_elem_item *new_double_item(double val);
-json_elem_item *new_int_item(int64_t val);
-json_elem_item *new_string_item(const char *s, uint32_t len);
-json_elem_item *new_cstring_item(const char *s);
-json_elem_item *new_array_item(uint32_t cap);
-json_elem_item *new_dict_item(uint32_t cap);
+json_elem_item *new_null_item(const void *cookie);
+json_elem_item *new_keyval_item(const char *key, uint32_t len, json_elem_item *n, const void *cookie);
+json_elem_item *new_bool_item(int val, const void *cookie);
+json_elem_item *new_double_item(double val, const void *cookie);
+json_elem_item *new_int_item(int64_t val, const void *cookie);
+json_elem_item *new_string_item(const char *s, uint32_t len, const void *cookie);
+json_elem_item *new_cstring_item(const char *s, const void *cookie);
+json_elem_item *new_array_item(uint32_t cap, const void *cookie);
+json_elem_item *new_dict_item(uint32_t cap, const void *cookie);
 
 int item_array_append(json_elem_item *arr, json_elem_item *n);
 int item_array_set(json_elem_item *arr, int index, json_elem_item *n);
 int item_array_item(json_elem_item *arr, int index, json_elem_item **n);
-int item_dict_set(json_elem_item *obj, const char *key, json_elem_item *n);
+int item_dict_set(json_elem_item *obj, const char *key, json_elem_item *n, const void *cookie);
 int item_dict_set_keyval(json_elem_item *obj, json_elem_item *kv, json_elem_item **old);
 int item_dict_get(json_elem_item *obj, const char *key, json_elem_item **val);
 
@@ -108,7 +115,7 @@ typedef struct {
     uint32_t len;
     uint32_t cap;
     int has_leading_dot;
-} search_path; 
+} search_path;
 
 search_path new_search_path(size_t cap);
 path_error search_path_find_ex(search_path *path, json_elem_item *root,

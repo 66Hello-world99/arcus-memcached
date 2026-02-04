@@ -59,19 +59,16 @@ static int32_t do_json_real_maxcount(int32_t maxcount)
 static hash_item *do_json_item_alloc(struct default_engine *engine,
                                      const void *key, const size_t nkey,
                                      item_attr *attrp, const void *cookie)
-{   //todo delete?
+{
     uint32_t flags = (attrp != NULL) ? attrp->flags : 0;
     rel_time_t exptime = (attrp != NULL) ? attrp->exptime : 0;
 
     uint32_t nbytes = 2; /* "\r\n" */
-    int real_nbytes = META_OFFSET_IN_ITEM(nkey,nbytes) 
-                     + sizeof(json_meta_info) - nkey;
+    int real_nbytes = META_OFFSET_IN_ITEM(nkey,nbytes)
+                    + sizeof(json_meta_info) - nkey;
 
-    //hash_item *it = do_item_alloc(key, nkey, attrp->flags, attrp->exptime,
-    //                              real_nbytes, cookie); 그냥 attrp 들어가는거 다 확인 todo
     hash_item *it = do_item_alloc(key, nkey, flags, exptime,
                                   real_nbytes, cookie);
-
     if (it != NULL) {
         it->iflag |= ITEM_IFLAG_JSON;
         it->nbytes = nbytes; /* NOT real_nbytes */
@@ -85,7 +82,7 @@ static hash_item *do_json_item_alloc(struct default_engine *engine,
         info->ovflact = OVFL_ERROR;
         info->mflags = 0;
 #ifdef ENABLE_STICKY_ITEM
-        if (attrp != NULL && IS_STICKY_EXPTIME(attrp->exptime)){ 
+        if (attrp != NULL && IS_STICKY_EXPTIME(attrp->exptime)){
             info->mflags |= COLL_META_FLAG_STICKY;
         }
 #endif
@@ -107,33 +104,33 @@ static json_elem_item *do_json_elem_alloc(struct default_engine *engine, json_no
 
     switch(type) {
       case N_DICT:
-           elem_item = new_dict_item(value->intval);
+           elem_item = new_dict_item(value->intval, cookie);
            break;
       case N_ARRAY:
-           elem_item = new_array_item(value->intval);
+           elem_item = new_array_item(value->intval, cookie);
            break;
       case N_STRING:
-           elem_item = new_string_item(value->strval.pos, value->strval.len);
+           elem_item = new_string_item(value->strval.pos, value->strval.len, cookie);
            break;
       case N_KEYVAL:
-           elem_item = new_keyval_item(value->strval.pos, value->strval.len, NULL);
+           elem_item = new_keyval_item(value->strval.pos, value->strval.len, NULL, cookie);
            break;
       case N_NUMBER:
-           elem_item = new_double_item(value->numval);
+           elem_item = new_double_item(value->numval, cookie);
            break;
       case N_INTEGER:
-           elem_item = new_int_item(value->intval);
+           elem_item = new_int_item(value->intval, cookie);
            break;
       case N_BOOLEAN:
-           elem_item = new_bool_item(value->boolval);
+           elem_item = new_bool_item(value->boolval, cookie);
            break;
       case N_NULL:
-           elem_item = new_null_item();
+           elem_item = new_null_item(cookie);
            break;
     }
     return elem_item;
 }
-
+//todo free 수정
 static void do_json_elem_free(json_elem_item **elem)
 {
     json_elem_item *_elem = *elem;
@@ -163,7 +160,9 @@ static void do_json_elem_free(json_elem_item **elem)
       case N_BOOLEAN:
            break;
     }
-    free(_elem);
+    //free(_elem);
+    size_t ntotal = sizeof(json_elem_item);
+    do_item_mem_free(_elem, ntotal);
     *elem = NULL;
 }
 
@@ -344,7 +343,7 @@ static ENGINE_ERROR_CODE do_json_elem_append(struct default_engine *engine, json
 
 static ENGINE_ERROR_CODE do_json_elem_set(struct default_engine *engine,
                                           hash_item *it, json_elem_item *elem_item,
-                                          const char *path, const size_t npath)
+                                          const char *path, const size_t npath, const void *cookie)
 {
     json_path_node jpn;
     ENGINE_ERROR_CODE ret;
@@ -356,14 +355,14 @@ static ENGINE_ERROR_CODE do_json_elem_set(struct default_engine *engine,
         return ENGINE_SUCCESS;
     }
 
-    
+
         ret = do_json_elem_get(&jpn, info->root, path, npath);
         if(ret == ENGINE_SUCCESS) {
             bool delete_old_elem = true;
 
             if (search_path_is_root_path(&jpn.sp)) {
                 if (info->root != NULL && info->root != elem_item) {
-                    do_json_elem_unlink(&info->root); 
+                    do_json_elem_unlink(&info->root);
                 }
                 info->root = elem_item;
             } else if(jpn.p !=NULL){
@@ -375,19 +374,19 @@ static ENGINE_ERROR_CODE do_json_elem_set(struct default_engine *engine,
                 }
             } else if (jpn.p->type == N_DICT) {
                 const char *tmp_key = jpn.sp.nodes[jpn.sp.len - 1].value.key;
-                if (item_dict_set(jpn.p, tmp_key, elem_item) != ENGINE_SUCCESS) {
+                if (item_dict_set(jpn.p, tmp_key, elem_item, cookie) != ENGINE_SUCCESS) {
                     delete_old_elem = false;
                     ret = ENGINE_ENOMEM;
                 }
             } else {
                 ret = ENGINE_ENOMEM;
             }
-            } 
+            }
             if (jpn.n != NULL && jpn.n != elem_item && delete_old_elem) {
                 do_json_elem_unlink(&jpn.n);
             }
         }
-    
+
     return ret;
 }
 
@@ -611,7 +610,7 @@ ENGINE_ERROR_CODE json_elem_set(struct default_engine *engine,
     hash_item *it = NULL;
     ENGINE_ERROR_CODE ret;
     *created = false;
-    
+
     LOCK_CACHE();
     ret = do_json_item_find(engine, key, nkey, DONT_UPDATE, &it);
     if (ret == ENGINE_KEY_ENOENT) {
@@ -628,7 +627,7 @@ ENGINE_ERROR_CODE json_elem_set(struct default_engine *engine,
         }
     }
     if (ret == ENGINE_SUCCESS) {
-        ret = do_json_elem_set(engine, it, elem_item, path, npath);
+        ret = do_json_elem_set(engine, it, elem_item, path, npath, cookie);
         do_json_elem_link(elem_item);
         if (ret != ENGINE_SUCCESS && *created) {
             do_item_unlink(it, ITEM_UNLINK_NORMAL);
@@ -674,14 +673,14 @@ ENGINE_ERROR_CODE json_elem_delete(struct default_engine *engine,
                         if (strcmp(dict_entries[i]->value.kvval.key, dict_key) == 0) {
                             index = i;
                             elem_item = &dict_entries[i];
-                            break; 
+                            break;
                         }
                     }
                 }
 
                 if (elem_item != NULL && *elem_item != NULL) {
                     do_json_elem_unlink(elem_item);
-                    
+
                     // parents node type is array
                     if (jpn.p->type == N_ARRAY) {
                         size_t new_len = --jpn.p->value.arrval.len;
@@ -706,7 +705,7 @@ ENGINE_ERROR_CODE json_elem_delete(struct default_engine *engine,
                 //delete root($)
                 if (info->root != NULL) {
                     do_json_elem_unlink(&info->root);
-                    info->root = NULL; 
+                    info->root = NULL;
                 } else {
                     ret = ENGINE_ELEM_ENOENT;
                 }

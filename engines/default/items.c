@@ -1933,7 +1933,7 @@ ENGINE_ERROR_CODE item_init(struct default_engine *engine_ptr)
     item_set_coll_init(engine);
     item_map_coll_init(engine);
     item_btree_coll_init(engine);
-#ifdef JSON_SUPPORT //todo notion
+#ifdef JSON_SUPPORT
     item_json_coll_init(engine);
 #endif
     logger->log(EXTENSION_LOG_INFO, NULL, "ITEM module initialized.\n");

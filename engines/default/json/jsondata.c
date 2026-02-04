@@ -1,119 +1,138 @@
+#include <assert.h>
 #include "jsondata.h"
+#include "engines/default/item_base.h"
+#include "engines/default/default_engine.h"
 
-static char *rmstrndup(const char *s, size_t len)
+static json_elem_item *_new_item(json_node_type t, uint32_t real_nbytes, const void *cookie)
 {
-    char *ret = (char*)malloc((len + 1) * sizeof(char));
-    if (ret) {
-        memcpy(ret, s, len);
+    size_t ntotal = sizeof(json_elem_item) + real_nbytes;
+
+    unsigned int clsid = slabs_clsid(ntotal);
+    if(clsid == 0) return NULL;
+
+    json_elem_item *elem = do_item_mem_alloc(ntotal, clsid, cookie);
+
+    if (elem != NULL) {
+        elem->slabs_clsid = clsid;
+        assert(elem->slabs_clsid > 0);
+
+        elem->refcount = 1;
+        elem->nbytes = ntotal;
+        elem->type = t;
+        elem->status = JSON_ITEM_STATUS_UNLINK;
     }
-    ret[len] = '\0';
-    return ret;
+    return elem;
 }
 
-static json_elem_item *_new_item(json_node_type t)
+json_elem_item *new_null_item(const void *cookie)
 {
-    json_elem_item *ret = NULL;
-    ret = (json_elem_item*)malloc(sizeof(json_elem_item));
-    ret->type = t;
-    ret->status = JSON_ITEM_STATUS_UNLINK;
-    ret->refcount = 1;
-    return ret;
+    return _new_item(N_NULL, 0, cookie);
 }
 
-json_elem_item *new_null_item(void)
+json_elem_item *new_bool_item(int val, const void *cookie)
 {
-    return _new_item(N_NULL);
-}
-
-json_elem_item *new_bool_item(int val)
-{
-    json_elem_item *ret = _new_item(N_BOOLEAN);
+    json_elem_item *ret = _new_item(N_BOOLEAN, 0, cookie);
     ret->value.boolval = val != 0;
     return ret;
 }
 
-json_elem_item *new_double_item(double val)
+json_elem_item *new_double_item(double val, const void *cookie)
 {
-    json_elem_item *ret = _new_item(N_NUMBER);
+    json_elem_item *ret = _new_item(N_NUMBER, 0, cookie);
     ret->value.numval = val;
     return ret;
 }
 
-json_elem_item *new_int_item(int64_t val)
+json_elem_item *new_int_item(int64_t val, const void *cookie)
 {
-    json_elem_item *ret = _new_item(N_INTEGER);
+    json_elem_item *ret = _new_item(N_INTEGER, 0, cookie);
     ret->value.intval = val;
     return ret;
 }
 
-json_elem_item *new_string_item(const char *s, uint32_t len)
+json_elem_item *new_string_item(const char *s, uint32_t len, const void *cookie)
 {
-    json_elem_item *ret = _new_item(N_STRING);
-    ret->value.strval.data = rmstrndup(s, len);
-    ret->value.strval.len = len;
-    return ret;
-}
+    json_elem_item *ret = _new_item(N_STRING, len+1, cookie);
+    if (ret){
+        char *ptr = (char*)(ret + 1);
+        memcpy(ptr, s, len);
+        ptr[len] = '\0';
 
-json_elem_item *new_cstring_item(const char *s)
-{
-    return new_string_item(s, strlen(s));
-}
-
-json_elem_item *new_keyval_item(const char *key, uint32_t len, json_elem_item *n)
-{
-    json_elem_item *ret = _new_item(N_KEYVAL);
-    ret->value.kvval.key = rmstrndup(key, len);
-    ret->value.kvval.val = n;
-    return ret;
-}
-
-json_elem_item *new_array_item(uint32_t cap)
-{
-    json_elem_item *ret = _new_item(N_ARRAY);
-    ret->value.arrval.cap = cap;
-    ret->value.arrval.len = 0;
-    ret->value.arrval.entries = (json_elem_item**)malloc(cap * sizeof(json_elem_item*));
-    return ret;
-}
-
-json_elem_item *new_dict_item(uint32_t cap)
-{
-    json_elem_item *ret = _new_item(N_DICT);
-    ret->value.dictval.cap = cap;
-    ret->value.dictval.len = 0;
-    ret->value.dictval.entries = (json_elem_item**)malloc(cap * sizeof(json_elem_item*));
-    return ret;
-}
-
-static void item_array_make_room_for(json_elem_item *arr, uint32_t addlen)
-{
-    t_array *a = &arr->value.arrval;
-    uint32_t newcap = a->len + addlen;
-
-    if (a->cap >= newcap) return ;
-
-    uint32_t nextcap = newcap;
-    nextcap--;
-    nextcap |= nextcap >> 1;
-    nextcap |= nextcap >> 2;
-    nextcap |= nextcap >> 4;
-    nextcap |= nextcap >> 8;
-    nextcap |= nextcap >> 16;
-    nextcap++;
-
-    const uint32_t CHUNK_SIZE = 1 << 20;
-    if (nextcap > CHUNK_SIZE) {
-        nextcap = ((newcap / CHUNK_SIZE) + 1) * CHUNK_SIZE;
+        ret->value.strval.data = ptr;
+        ret->value.strval.len = len;
     }
+    return ret;
+}
 
-    a->cap = nextcap;
-    a->entries = (json_elem_item**)realloc(a->entries, a->cap * sizeof(json_elem_item));
+json_elem_item *new_cstring_item(const char *s, const void *cookie)
+{
+    return new_string_item(s, strlen(s), cookie);
+}
+
+json_elem_item *new_keyval_item(const char *key, uint32_t len, json_elem_item *n, const void *cookie)
+{
+    json_elem_item *ret = _new_item(N_KEYVAL, len+1, cookie);
+    if(ret){
+        char *ptr = (char*)(ret + 1);
+        memcpy(ptr, key, len);
+        ptr[len] = '\0';
+        ret->value.kvval.key = ptr;
+        ret->value.kvval.val = n;
+    }
+    return ret;
+}
+
+json_elem_item *new_array_item(uint32_t cap, const void *cookie)
+{
+    json_elem_item *ret = _new_item(N_ARRAY, 0, cookie);
+    if(ret){
+        ret->value.arrval.cap = MAX_CONTAINER_SIZE;
+        ret->value.arrval.len = 0;
+        ret->value.arrval.alloc_size = INITIAL_CONTAINER_SIZE;
+        ret->value.arrval.entries = (json_elem_item**)malloc(INITIAL_CONTAINER_SIZE * sizeof(json_elem_item*));
+    }
+    return ret;
+}
+
+json_elem_item *new_dict_item(uint32_t cap, const void *cookie)
+{
+    json_elem_item *ret = _new_item(N_DICT, 0, cookie);
+    if(ret){
+        ret->value.dictval.cap = MAX_CONTAINER_SIZE;
+        ret->value.dictval.len = 0;
+        ret->value.dictval.alloc_size = INITIAL_CONTAINER_SIZE;
+        ret->value.dictval.entries = (json_elem_item**)malloc(INITIAL_CONTAINER_SIZE * sizeof(json_elem_item*));
+    }
+    return ret;
+}
+
+static int item_array_make_room_for(json_elem_item *arr, uint32_t addlen)
+{
+    printf("item_array_make_room_for\n");
+    t_array *a = &arr->value.arrval;
+    uint32_t required = a->len + addlen;
+
+    if (a->alloc_size >= required) return OBJ_OK;
+    if (required > a->cap) return OBJ_ERR;
+
+    uint32_t next_alloc = a->alloc_size * 2;
+    if (next_alloc > a->cap) next_alloc = a->cap;
+    if (next_alloc < required) next_alloc = required;
+
+    void *new_entries = realloc(a->entries, next_alloc * sizeof(json_elem_item*));
+    if (!new_entries) return OBJ_ERR;\
+
+    a->entries = (json_elem_item**)new_entries;
+    a->alloc_size = next_alloc;
+    return OBJ_OK;
 }
 
 int item_array_append(json_elem_item *arr, json_elem_item *n)
 {
     t_array *a = &arr->value.arrval;
-    item_array_make_room_for(arr,1);
+    if(item_array_make_room_for(arr, 1) != OBJ_OK){
+        return OBJ_ERR;
+    }
     a->entries[a->len++] = n;
 
     return OBJ_OK;
@@ -154,16 +173,29 @@ static json_elem_item *_obj_find(t_dict *o, const char *key, int *idx)
     return NULL;
 }
 
-static void _obj_insert(t_dict *o, json_elem_item *n)
+static int _obj_insert(t_dict *o, json_elem_item *n)
 {
-    if (o->len >= o->cap) {
-        o->cap += o->cap ? (o->cap < 1024 * 1024 ? o->cap : 1024*1024) : 1;
-        o->entries = (json_elem_item**)realloc(o->entries, o->cap * sizeof(t_keyval*));
+    uint32_t required = o->len + 1;
+
+    if (required > o->alloc_size) {
+
+        if (required > o->cap) {
+            return OBJ_ERR;
+        }
+        uint32_t next_alloc = o->alloc_size * 2;
+        if (next_alloc > o->cap) next_alloc = o->cap;
+
+        void *new_ptr = realloc(o->entries, next_alloc * sizeof(json_elem_item*));
+        if (!new_ptr) return OBJ_ERR;
+
+        o->entries = (json_elem_item**)new_ptr;
+        o->alloc_size = next_alloc;
     }
     o->entries[o->len++] = n;
+    return OBJ_OK;
 }
 
-int item_dict_set(json_elem_item *obj, const char *key, json_elem_item *n)
+int item_dict_set(json_elem_item *obj, const char *key, json_elem_item *n, const void *cookie)
 {
     t_dict *o = &obj->value.dictval;
 
@@ -175,10 +207,10 @@ int item_dict_set(json_elem_item *obj, const char *key, json_elem_item *n)
         kv->value.kvval.val = n;
         return OBJ_OK;
     }
-    kv = new_keyval_item(key, strlen(key),n);
-    _obj_insert(o, kv);
+    kv = new_keyval_item(key, strlen(key),n, cookie);
+    if (kv == NULL) return OBJ_ERR;
 
-    return OBJ_OK;
+    return _obj_insert(o, kv);
 }
 
 int item_dict_set_keyval(json_elem_item *obj, json_elem_item *kv, json_elem_item **old)
@@ -194,8 +226,7 @@ int item_dict_set_keyval(json_elem_item *obj, json_elem_item *kv, json_elem_item
         *old = _kv;
         return OBJ_OK;
     }
-    _obj_insert(o, kv);
-    return OBJ_OK;
+    return _obj_insert(o, kv);
 }
 
 int item_dict_get(json_elem_item *obj, const char *key, json_elem_item **val)
@@ -222,38 +253,23 @@ static json_elem_item *path_item_eval(path_item *pn, json_elem_item *n, path_err
 
     if (n->type == N_ARRAY) {
         json_elem_item *rn = NULL;
-        int index = -1;
+        int index = 0;
 
-        // [수정] 타입이 NT_INDEX가 아니더라도, 키 값이 숫자라면 인덱스로 인정해줌
         if (NT_INDEX == pn->type) {
             index = pn->value.index;
-        } else if (NT_KEY == pn->type) {
-            // "0", "1" 같은 문자열을 숫자로 변환 시도
-            char *endptr;
-            index = (int)strtol(pn->value.key, &endptr, 10);
-            if (*endptr != '\0') { // 숫자가 아닌 문자가 섞여있다면 실패
-                goto badtype;
-            }
-        }
 
-        if (index < 0) index = n->value.arrval.len + index;
-        int rc = item_array_item(n, index, &rn);
-        if (rc != OBJ_OK) {
-            *err = E_NOINDEX;
-        }
-        return rn;
-/*
-        if (NT_INDEX == pn->type) {
-            int index = pn->value.index;
-            if (index < 0) index = n->value.arrval.len + index;
+            if (index < 0) {
+                index = n->value.arrval.len + index;
+            }
             int rc = item_array_item(n, index, &rn);
             if (rc != OBJ_OK) {
                 *err = E_NOINDEX;
             }
+
         } else {
             goto badtype;
         }
-        return rn;*/
+        return rn;
     }
     if (n->type == N_DICT) {
         if (pn->type != NT_KEY) {
@@ -324,7 +340,7 @@ static void search_path_append_key(search_path *p, const char *key, const size_t
 {
     path_item pn;
     pn.type = NT_KEY;
-    pn.value.key = rmstrndup(key, len);
+    pn.value.key = strndup(key, len);
     _search_path_append(p, pn);
 }
 
@@ -346,8 +362,8 @@ static int _tokenize_path(const char *json, size_t len, search_path *path)
     tok.type = T_KEY;
 
     while (offset <= len) {
-        char c = (offset < len) ? *pos : '\0'; 
-        
+        char c = (offset < len) ? *pos : '\0';
+
         switch (st) {
           case S_NULL:
                if (c == '$') {
@@ -376,11 +392,11 @@ static int _tokenize_path(const char *json, size_t len, search_path *path)
                if (c == '.' || c == '[' || c == '\0') {
                    if (tok.len == 1 && tok.s[0] == '$') search_path_append_root(path);
                    else if (tok.len > 0) search_path_append_key(path, tok.s, tok.len);
-                   
+
                    if (c == '.') st = S_DOT;
                    else if (c == '[') st = S_BRACKET;
                    else st = S_NULL;
-                   tok.len = 0; 
+                   tok.len = 0;
                } else if (isalnum(c) || c == '_' || c == '$') {
                    tok.len++;
                } else goto syntaxerror;
@@ -395,7 +411,7 @@ static int _tokenize_path(const char *json, size_t len, search_path *path)
                else goto syntaxerror;
                break;
 
-          case S_MINUS: // [추가] 마이너스 부호 처리
+          case S_MINUS: // 마이너스 부호 처리
                if (isdigit(c)) {
                    tok.len++;
                    st = S_NUMBER;
@@ -420,7 +436,7 @@ static int _tokenize_path(const char *json, size_t len, search_path *path)
           case S_SKEY:
                if (c == '"' || c == '\'') {
                    if (tok.len > 0) search_path_append_key(path, tok.s, tok.len);
-                   st = S_NULL; 
+                   st = S_NULL;
                } else {
                    if (tok.len == 0) tok.s = pos;
                    tok.len++;
@@ -435,175 +451,6 @@ static int _tokenize_path(const char *json, size_t len, search_path *path)
 
 syntaxerror:
     return PARSE_ERR;
-
-    /*
-    tokenizer_state st = S_NULL;
-    size_t offset = 0;
-    char *pos = (char *)json;
-    token tok;
-    tok.len = 0;
-    tok.s = pos;
-
-    while (offset < len) {
-        char c = *pos;
-        switch (st) {
-          case S_NULL:
-               switch (c) {
-                 case '.':
-                      tok.s++;
-                      st = S_ROOT;
-                      if (pos == json) {
-                          path->has_leading_dot = 1;
-                      }
-                      break;
-                 case '[':
-                      tok.s++;
-                      st = S_BRACKET;
-                      break;
-                 default:
-                      if (isalpha(c) || '$' == c || '_' == c) {
-                          tok.len++;
-                          st = S_IDENT;
-                          break;
-                      }
-                      goto syntaxerror;
-               }
-               break;
-          case S_BRACKET:
-               if (c == '"') {
-                   tok.s++;
-                   st = S_DKEY;
-               } else if (c == '\'') {
-                   tok.s++;
-                   st = S_SKEY;
-               } else if (isdigit(c)) {
-                   tok.len++;
-                   st = S_NUMBER;
-               } else if ('-' == c) {
-                   tok.len++;
-                   st = S_MINUS;
-               } else {
-                   goto syntaxerror;
-               }
-               break;
-          case S_ROOT:
-          case S_DOT:
-               if (isalpha(c) || '$' == c || '_' == c) {
-                   tok.len++;
-                   st = S_IDENT;
-               } else {
-                   goto syntaxerror;
-               }
-               break;
-          case S_NUMBER:
-               if (isdigit(c)) {
-                   tok.len++;
-                   break;
-               }
-               if (c == ']') {
-                   st = S_NULL;
-                   tok.type = T_INDEX;
-                   pos++;
-                   offset++;
-                   goto tokenend;
-               }
-               goto syntaxerror;
-
-          case S_IDENT:
-               if (c == '.' || c == '[') {
-                   //st = c == '.' ? S_DOT : S_BRACKET;
-                   tok.type = T_KEY;
-                   //pos ++;
-                   //offset++;
-                   goto tokenend;
-               }
-               if (!isalnum(c) && '$' != c && '_' != c) {
-                   goto syntaxerror;
-               }
-               tok.len++;
-               break;
-          case S_DKEY:
-               if (c == '"') {
-                   if (offset < len - 1 && *(pos + 1) == ']') {
-                       tok.type = T_KEY;
-                       pos += 2;
-                       offset += 2;
-                       st = S_NULL;
-                       goto tokenend;
-                   } else {
-                       goto syntaxerror;
-                   }
-               }
-               tok.len++;
-               break;
-          case S_SKEY:
-               if (c == '\'') {
-                   if (offset < len - 1 && *(pos+1) == ']') {
-                       tok.type = T_KEY;
-                       pos += 2;
-                       offset += 2;
-                       st = S_NULL;
-                       goto tokenend;
-                   } else {
-                       goto syntaxerror;
-                   }
-               }
-               tok.len++;
-               break;
-          case S_MINUS:
-               if (isdigit(c)) {
-                   tok.len++;
-                   st = S_NUMBER;
-               } else {
-                   goto syntaxerror;
-               }
-               break;
-        }
-        offset++;
-        pos++;
-
-        if (len == offset && (S_IDENT == st || S_ROOT == st)) {
-            st = S_NULL;
-            tok.type = T_KEY;
-            goto tokenend;
-        }
-        continue;
-
-        tokenend:
-        {
-            if (T_INDEX == tok.type) {
-                int64_t num = 0;
-                for (int i = !isdigit(tok.s[0]); i < tok.len; i++) {
-                    int digit = tok.s[i]- '0';
-                    num = num * 10 + digit;
-                }
-                if ('-' == tok.s[0]) num = -num;
-                search_path_append_index(path, num);
-            } else if (T_KEY == tok.type) {
-                // 핵심 수정: 토큰 내용이 '$' 하나라면 무조건 루트로 판정
-                if (tok.len == 1 && tok.s[0] == '$') {
-                    search_path_append_root(path);
-                } 
-                // 토큰 내용이 '.' 하나일 때도 루트로 판정 (선택 사항)
-                else if (tok.len == 1 && tok.s[0] == '.') {
-                    search_path_append_root(path);
-                } 
-                else if (tok.len > 0) {
-                    search_path_append_key(path, tok.s, tok.len);
-                }
-            }
-            if (c == '.') st = S_DOT;
-            else if (c == '[') st = S_BRACKET;
-            else st = S_NULL;
-            tok.s = pos;
-            tok.len = 0;
-        }
-    }
-    if (st == S_NULL || st == S_IDENT || st == S_ROOT) {
-        return PARSE_OK;
-    }
-syntaxerror:
-    return PARSE_ERR;*/
 }
 
 int parse_json_path(const char *json_path, size_t len,

@@ -102,7 +102,7 @@ jsonsl_t jsonsl_new(int nlevels)
 {
     unsigned int ii;
     struct jsonsl_st * jsn;
-    
+
     if (nlevels < 2) {
         return NULL;
     }
